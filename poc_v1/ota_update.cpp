@@ -101,7 +101,7 @@ bool OTAManager::isVersionNewer(const String& version1, const String& version2) 
 }
 
 String OTAManager::constructDownloadUrl(const String& version) {
-  return String(GITHUB_DOWNLOAD_BASE) + "v" + version + "/satisfactron-fw-h1_" + version + ".bin";
+  return String(GITHUB_DOWNLOAD_BASE) + "v" + version + "/satisfactron-h1-fw_" + version + ".bin";
 }
 
 bool OTAManager::checkForUpdate() {

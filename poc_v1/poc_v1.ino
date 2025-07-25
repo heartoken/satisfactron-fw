@@ -10,7 +10,7 @@
 #define API_ENDPOINT   "/api/votes"
 #define TEST_URL       "https://satisfactron.vercel.app/"
 #define LED_ERR_PIN    1
-#define FIRMWARE_VERSION "25.07.25.3"  // Updated version
+#define FIRMWARE_VERSION "25.07.25.4"  // Updated version
 
 // —— HARDWARE —————————————————————————————————————
 #define PIN_RGBLED_3V3  9
