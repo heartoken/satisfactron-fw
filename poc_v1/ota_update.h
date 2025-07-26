@@ -1,6 +1,4 @@
-#ifndef OTA_UPDATE_H
-#define OTA_UPDATE_H
-
+#pragma once
 #include <Arduino.h>
 
 class OTAManager {
@@ -9,24 +7,21 @@ private:
   unsigned long lastCheckTime;
   unsigned long checkInterval;
   unsigned long noVoteTimeThreshold;
-  void (*preUpdateCallback)() = nullptr;
-  void (*postUpdateCallback)() = nullptr;
+  void (*preUpdateCallback)();
+  void (*postUpdateCallback)();
   
   String getLatestReleaseVersion();
   bool isVersionNewer(const String& version1, const String& version2);
   String constructDownloadUrl(const String& version);
-
+  String followRedirect(const String& url);  // Add this declaration
+  
 public:
-  void init(const char* currentVersion);
-  void setPreUpdateCallback(void (*callback)());
-  void setPostUpdateCallback(void (*callback)());
+  void init(const char* version);
   void handle();
   bool checkForUpdate();
+  bool forceCheckForUpdate();
   bool performUpdate();
   bool shouldCheckForUpdate();
+  void setPreUpdateCallback(void (*callback)());
+  void setPostUpdateCallback(void (*callback)());
 };
-
-extern OTAManager ota;
-extern volatile unsigned long lastAnyVoteTime;
-
-#endif

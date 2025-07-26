@@ -1,1 +1,4 @@
 venv/
+
+poc_v1/build/esp32.esp32.esp32s3/
+!poc_v1/build/esp32.esp32.esp32s3/satisfactron*.bin

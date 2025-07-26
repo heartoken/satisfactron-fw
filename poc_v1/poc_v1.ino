@@ -10,7 +10,7 @@
 #define API_ENDPOINT   "/api/votes"
 #define TEST_URL       "https://satisfactron.vercel.app/"
 #define LED_ERR_PIN    1
-#define FIRMWARE_VERSION "25.07.25.3"  
+#define FIRMWARE_VERSION "25.07.26.1"
 
 // —— HARDWARE —————————————————————————————————————
 #define PIN_RGBLED_3V3  9
@@ -120,30 +120,36 @@ void setAllLEDsPurple() {
     strip.setPixelColor(i, strip.Color(128, 0, 128)); // Purple
   }
   strip.show();
+  Serial.println("💜 LEDs set to purple for OTA");
 }
 
 void restoreNormalLEDs() {
   uint32_t color = (WiFi.status() == WL_CONNECTED && serverOK) ? 
                    strip.Color(0, 0, 255) : strip.Color(255, 0, 0);
   updateIdleColors(color);
+  Serial.println("🔄 LEDs restored to normal");
 }
 
 void otaTask(void *parameter) {
-  // Wait for WiFi and server to be ready
-  while (WiFi.status() != WL_CONNECTED || !serverOK) {
+  // Wait for WiFi to be ready
+  while (WiFi.status() != WL_CONNECTED) {
+    Serial.println("⏳ OTA task waiting for WiFi...");
     vTaskDelay(pdMS_TO_TICKS(1000));
   }
+  
+  Serial.println("🔄 OTA task started - WiFi ready");
   
   // Regular OTA handling
   while (true) {
     ota.handle();
-    vTaskDelay(pdMS_TO_TICKS(5000)); // Check every 5 seconds
+    vTaskDelay(pdMS_TO_TICKS(60000)); // Check every 1 minute (not 5 seconds - too frequent)
   }
 }
 
 void setup() {
   Serial.begin(115200);
-  Serial.println("=== Satisfactron Device Starting ===");
+  delay(1000); // Give serial time to connect
+  Serial.println("\n\n=== Satisfactron Device Starting ===");
   
   // Initialize device config
   if (!deviceConfig.init()) {
@@ -171,7 +177,6 @@ void setup() {
   if (wifiSSID.length() == 0) {
     Serial.println("❌ No WiFi SSID configured in NVS");
     updateIdleColors(strip.Color(255, 0, 0)); // Keep red
-    // Could implement AP mode for configuration here
     while (true) delay(1000); // Halt execution
   }
   
@@ -180,36 +185,42 @@ void setup() {
   
   // Wait for WiFi with timeout
   int attempts = 0;
-  while (WiFi.status() != WL_CONNECTED && attempts < 20) {
+  while (WiFi.status() != WL_CONNECTED && attempts < 30) { // Increased timeout
     delay(500);
     Serial.print(".");
     attempts++;
   }
+  Serial.println();
   
   if (WiFi.status() == WL_CONNECTED) {
-    Serial.printf("\n✅ WiFi connected: %s\n", WiFi.localIP().toString().c_str());
-    // Keep LEDs red until server check passes
+    Serial.printf("✅ WiFi connected: %s\n", WiFi.localIP().toString().c_str());
+    
+    // Initialize OTA AFTER WiFi is connected
+    Serial.println("🔧 Initializing OTA Manager...");
+    ota.init(FIRMWARE_VERSION);
+    ota.setPreUpdateCallback(setAllLEDsPurple);
+    ota.setPostUpdateCallback(restoreNormalLEDs);
+    
+    // Force boot-time update check (bypass shouldCheckForUpdate)
+    Serial.println("🔍 BOOT: Forcing OTA update check...");
+    bool updateAvailable = ota.forceCheckForUpdate();
+    
+    if (updateAvailable) {
+      Serial.println("📦 BOOT: Update available, starting OTA...");
+      bool updateSuccess = ota.performUpdate();
+      if (!updateSuccess) {
+        Serial.println("❌ BOOT: Update failed, continuing with current version...");
+      }
+      // If successful, device will reboot and we won't reach here
+    } else {
+      Serial.println("✅ BOOT: No update needed, continuing...");
+    }
+    
   } else {
-    Serial.println("\n❌ WiFi connection failed");
+    Serial.println("❌ WiFi connection failed - OTA disabled");
     updateIdleColors(strip.Color(255, 0, 0)); // Red for error
   }
   
-  // Initialize OTA
-  ota.init(FIRMWARE_VERSION);
-  ota.setPreUpdateCallback(setAllLEDsPurple);
-  ota.setPostUpdateCallback(restoreNormalLEDs);
-  
-  if (WiFi.status() == WL_CONNECTED) {
-    Serial.println("🔍 Checking for OTA update on boot...");
-    if (ota.shouldCheckForUpdate()) {
-      Serial.println("📦 Update available, starting OTA...");
-      ota.performUpdate();
-      // If we reach here, update failed - continue normal operation
-    } else {
-      Serial.println("✅ No update needed, continuing...");
-    }
-  }
-
   // Create HTTP task on Core 1
   xTaskCreatePinnedToCore(
     httpTask,        // Function
@@ -221,16 +232,18 @@ void setup() {
     1                // Core 1
   );
   
-  // Create OTA task on Core 0
-  xTaskCreatePinnedToCore(
-    otaTask,         // Function
-    "OTATask",       // Name
-    16384,           // Increased stack size
-    NULL,            // Parameter
-    1,               // Priority
-    &otaTaskHandle,  // Task handle
-    0                // Core 0
-  );
+  // Create OTA task on Core 0 (only if WiFi connected)
+  if (WiFi.status() == WL_CONNECTED) {
+    xTaskCreatePinnedToCore(
+      otaTask,         // Function
+      "OTATask",       // Name
+      16384,           // Increased stack size
+      NULL,            // Parameter
+      1,               // Priority
+      &otaTaskHandle,  // Task handle
+      0                // Core 0
+    );
+  }
   
   Serial.println("=== Setup Complete ===\n");
 }
