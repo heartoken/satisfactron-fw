@@ -10,7 +10,7 @@
 #define API_ENDPOINT   "/api/votes"
 #define TEST_URL       "https://satisfactron.vercel.app/"
 #define LED_ERR_PIN    1
-#define FIRMWARE_VERSION "25.07.26.1"
+#define FIRMWARE_VERSION "25.07.26.2"
 
 // —— HARDWARE —————————————————————————————————————
 #define PIN_RGBLED_3V3  9
@@ -24,6 +24,7 @@ Adafruit_NeoPixel strip(NUMPIXELS, PIN_RGBLED_3V3, NEO_RGB + NEO_KHZ800);
 extern DeviceConfig deviceConfig; // Use extern - defined in device_config.cpp
 OTAManager ota; // Add OTA instance
 volatile uint32_t lastAnyVoteTime = 0; // Add missing variable
+volatile bool otaInProgress = false; // ADD THIS - flag to disable voting during OTA
 
 // —— TIMINGS —————————————————————————————————————
 const uint32_t HOLD_EXTEND_MS = 2000;  // extend hold time per vote
@@ -52,6 +53,12 @@ TaskHandle_t httpTaskHandle = NULL;
 TaskHandle_t otaTaskHandle = NULL;
 
 void queueVote(uint8_t vote) {
+  // BLOCK VOTING DURING OTA
+  if (otaInProgress) {
+    Serial.printf("🚫 Vote blocked - OTA in progress\n");
+    return;
+  }
+  
   uint8_t nextTail = (queueTail + 1) % QUEUE_SIZE;
   if (nextTail != queueHead) {
     voteQueue[queueTail] = {vote, millis()};
@@ -102,7 +109,8 @@ void sendVote(uint8_t vote) {
 
 void httpTask(void *parameter) {
   while (true) {
-    if (queueHead != queueTail && WiFi.status() == WL_CONNECTED && serverOK) {
+    // BLOCK HTTP TASK DURING OTA  
+    if (!otaInProgress && queueHead != queueTail && WiFi.status() == WL_CONNECTED && serverOK) {
       Vote vote = voteQueue[queueHead];
       uint8_t nextHead = (queueHead + 1) % QUEUE_SIZE;
       
@@ -116,18 +124,20 @@ void httpTask(void *parameter) {
 }
 
 void setAllLEDsPurple() {
+  otaInProgress = true; // SET FLAG BEFORE CHANGING LEDS
   for (int i = 0; i < NUMPIXELS; i++) {
     strip.setPixelColor(i, strip.Color(128, 0, 128)); // Purple
   }
   strip.show();
-  Serial.println("💜 LEDs set to purple for OTA");
+  Serial.println("💜 LEDs set to purple for OTA - VOTING DISABLED");
 }
 
 void restoreNormalLEDs() {
   uint32_t color = (WiFi.status() == WL_CONNECTED && serverOK) ? 
                    strip.Color(0, 0, 255) : strip.Color(255, 0, 0);
   updateIdleColors(color);
-  Serial.println("🔄 LEDs restored to normal");
+  otaInProgress = false; // CLEAR FLAG AFTER RESTORING LEDS
+  Serial.println("🔄 LEDs restored to normal - VOTING ENABLED");
 }
 
 void otaTask(void *parameter) {
@@ -281,35 +291,37 @@ void loop() {
     }
   }
 
-  // Button scanning and vote processing
-  for (uint8_t i = 0; i < NUMPIXELS; i++) {
-    bool pressed = (digitalRead(uswPins[i]) == LOW);
-    uint8_t vote = NUMPIXELS - i;
-    
-    // Handle new vote (respects debounce)
-    if (pressed && now - lastVoteTime[i] >= DEBOUNCE_MS) {
-      lastVoteTime[i] = now;
-      slotEndTime[i] = now + HOLD_EXTEND_MS;  // extend or set hold time
+  // Button scanning and vote processing - SKIP IF OTA IN PROGRESS
+  if (!otaInProgress) {
+    for (uint8_t i = 0; i < NUMPIXELS; i++) {
+      bool pressed = (digitalRead(uswPins[i]) == LOW);
+      uint8_t vote = NUMPIXELS - i;
       
-      if (!slotActive[i]) {
-        slotActive[i] = true;
-        Serial.printf("→ Slot %u activated\n", vote);
+      // Handle new vote (respects debounce)
+      if (pressed && now - lastVoteTime[i] >= DEBOUNCE_MS) {
+        lastVoteTime[i] = now;
+        slotEndTime[i] = now + HOLD_EXTEND_MS;  // extend or set hold time
+        
+        if (!slotActive[i]) {
+          slotActive[i] = true;
+          Serial.printf("→ Slot %u activated\n", vote);
+        }
+        
+        // Set LED to green and queue vote
+        strip.setPixelColor(i, strip.Color(0, 255, 0));
+        strip.show();
+        Serial.printf("🗳️ Vote %u registered\n", vote);
+        queueVote(vote);
       }
       
-      // Set LED to green and queue vote
-      strip.setPixelColor(i, strip.Color(0, 255, 0));
-      strip.show();
-      Serial.printf("🗳️ Vote %u registered\n", vote);
-      queueVote(vote);
-    }
-    
-    // Handle slot deactivation when hold time expires
-    if (slotActive[i] && now >= slotEndTime[i]) {
-      slotActive[i] = false;
-      uint32_t col = (wifiOK && serverOK) ? strip.Color(0, 0, 255) : strip.Color(255, 0, 0);
-      strip.setPixelColor(i, col);
-      strip.show();
-      Serial.printf("↱ Slot %u deactivated\n", vote);
+      // Handle slot deactivation when hold time expires
+      if (slotActive[i] && now >= slotEndTime[i]) {
+        slotActive[i] = false;
+        uint32_t col = (wifiOK && serverOK) ? strip.Color(0, 0, 255) : strip.Color(255, 0, 0);
+        strip.setPixelColor(i, col);
+        strip.show();
+        Serial.printf("↱ Slot %u deactivated\n", vote);
+      }
     }
   }
 
