@@ -57,6 +57,7 @@ String OTAManager::getLatestReleaseVersion() {
   HTTPClient http;
   http.begin(GITHUB_API_URL);
   http.addHeader("User-Agent", "Satisfactron-Device");
+  http.setTimeout(10000); // 10 second timeout
   
   int httpCode = http.GET();
   if (httpCode != HTTP_CODE_OK) {
@@ -101,6 +102,7 @@ bool OTAManager::isVersionNewer(const String& version1, const String& version2) 
 }
 
 String OTAManager::constructDownloadUrl(const String& version) {
+  // FIXED: Match your actual filename format
   return String(GITHUB_DOWNLOAD_BASE) + "v" + version + "/satisfactron-h1-fw_" + version + ".bin";
 }
 
@@ -136,7 +138,7 @@ bool OTAManager::performUpdate() {
   WiFiClientSecure client;
   client.setInsecure(); // Skip certificate verification for GitHub
   
-  // Perform update - correct function signature
+  // Perform update
   HTTPUpdateResult result = httpUpdate.update(client, downloadUrl, currentVersion);
   
   switch (result) {

@@ -10,7 +10,7 @@
 #define API_ENDPOINT   "/api/votes"
 #define TEST_URL       "https://satisfactron.vercel.app/"
 #define LED_ERR_PIN    1
-#define FIRMWARE_VERSION "25.07.25.4"  // Updated version
+#define FIRMWARE_VERSION "25.07.25.3"  
 
 // —— HARDWARE —————————————————————————————————————
 #define PIN_RGBLED_3V3  9
@@ -85,13 +85,16 @@ void sendVote(uint8_t vote) {
   http.begin(url);
   http.addHeader("Content-Type", "application/json");
   
-  String payload = "{\"vote\":" + String(vote) + ",\"device_id\":\"" + deviceConfig.getDeviceId() + "\"}";
+  // FIXED: Use the correct JSON format that works
+  String payload = "{\"deviceId\":\"" + deviceConfig.getDeviceId() + "\",\"voteValue\":" + String(vote) + "}";
   
   int httpResponseCode = http.POST(payload);
-  if (httpResponseCode > 0) {
+  String response = http.getString();
+  
+  if (httpResponseCode == 201) {
     Serial.printf("✅ Vote sent: %d (HTTP %d)\n", vote, httpResponseCode);
   } else {
-    Serial.printf("❌ Vote failed: %d (HTTP %d)\n", vote, httpResponseCode);
+    Serial.printf("❌ Vote failed: %d (HTTP %d) %s\n", vote, httpResponseCode, response.c_str());
   }
   
   http.end();
@@ -99,7 +102,7 @@ void sendVote(uint8_t vote) {
 
 void httpTask(void *parameter) {
   while (true) {
-    if (queueHead != queueTail) {
+    if (queueHead != queueTail && WiFi.status() == WL_CONNECTED && serverOK) {
       Vote vote = voteQueue[queueHead];
       uint8_t nextHead = (queueHead + 1) % QUEUE_SIZE;
       
@@ -197,7 +200,7 @@ void setup() {
   ota.setPostUpdateCallback(restoreNormalLEDs);
   
   if (WiFi.status() == WL_CONNECTED) {
-  Serial.println("🔍 Checking for OTA update on boot...");
+    Serial.println("🔍 Checking for OTA update on boot...");
     if (ota.shouldCheckForUpdate()) {
       Serial.println("📦 Update available, starting OTA...");
       ota.performUpdate();
@@ -211,7 +214,7 @@ void setup() {
   xTaskCreatePinnedToCore(
     httpTask,        // Function
     "HTTPTask",      // Name
-    8192,            // Stack size
+    16384,           // Increased stack size
     NULL,            // Parameter
     2,               // Priority
     &httpTaskHandle, // Task handle
@@ -222,7 +225,7 @@ void setup() {
   xTaskCreatePinnedToCore(
     otaTask,         // Function
     "OTATask",       // Name
-    8192,            // Stack size
+    16384,           // Increased stack size
     NULL,            // Parameter
     1,               // Priority
     &otaTaskHandle,  // Task handle
