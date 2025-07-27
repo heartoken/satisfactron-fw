@@ -13,7 +13,10 @@ private:
   String getLatestReleaseVersion();
   bool isVersionNewer(const String& version1, const String& version2);
   String constructDownloadUrl(const String& version);
-  String followRedirect(const String& url);  // Add this declaration
+  String followRedirect(const String& url);
+  void initOLED();
+  void showNoVoteMessage();
+  void clearOLED();
   
 public:
   void init(const char* version);

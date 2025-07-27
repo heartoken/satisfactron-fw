@@ -5,17 +5,60 @@
 #include <WiFiClientSecure.h>
 #include <ArduinoJson.h>
 #include <Adafruit_NeoPixel.h>
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
 
 #define GITHUB_API_URL "https://api.github.com/repos/heartoken/satisfactron-fw/releases/latest"
 #define GITHUB_DOWNLOAD_BASE "https://github.com/heartoken/satisfactron-fw/releases/download/"
 
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 32
+#define OLED_RESET -1
+#define SCREEN_ADDRESS 0x3C
+
 extern volatile uint32_t lastAnyVoteTime;
+
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+
+void OTAManager::initOLED() {
+  Wire.begin(12, 11); // SDA=12, SCL=11
+  if (!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
+    Serial.println("❌ SSD1306 allocation failed");
+    return;
+  }
+  display.setRotation(2); // Rotate 180 degrees to fix upside-down
+  display.clearDisplay();
+  display.display();
+}
+
+void OTAManager::showNoVoteMessage() {
+  display.clearDisplay();
+  display.setTextSize(2);
+  display.setTextColor(SSD1306_WHITE);
+  
+  // "NO VOTE" - centered horizontally, upper portion
+  display.setCursor(10, 2);
+  display.println("NO VOTE");
+  
+  // "KEEP ON" - centered horizontally, lower portion
+  display.setCursor(16, 18);
+  display.println("KEEP ON");
+  
+  display.display();
+}
+
+void OTAManager::clearOLED() {
+  display.clearDisplay();
+  display.display();
+}
 
 void OTAManager::init(const char* version) {
   this->currentVersion = version;
   this->lastCheckTime = 0;
   this->checkInterval = 5 * 60 * 1000; // 5 minutes
   this->noVoteTimeThreshold = 10 * 60 * 1000; // 10 minutes
+  initOLED();
   Serial.printf("🔄 OTA Manager initialized with version: %s\n", currentVersion);
 }
 
@@ -203,9 +246,14 @@ bool OTAManager::checkForUpdate() {
 bool OTAManager::performUpdate() {
   Serial.println("🚀 Starting OTA update process...");
   
+  // Show NO VOTE / KEEP ON on OLED
+  showNoVoteMessage();
+  Serial.println("📺 OLED showing 'NO VOTE / KEEP ON' message");
+  
   String latestVersion = getLatestReleaseVersion();
   if (latestVersion.length() == 0) {
     Serial.println("❌ Could not determine latest version for update");
+    clearOLED();
     return false;
   }
   
@@ -245,6 +293,7 @@ bool OTAManager::performUpdate() {
       // Additional error details
       Serial.printf("🔍 HTTPUpdate Error Code: %d\n", httpUpdate.getLastError());
       
+      clearOLED();
       if (postUpdateCallback) {
         Serial.println("🔄 Calling post-update callback (restore LEDs)");
         postUpdateCallback();
@@ -253,6 +302,7 @@ bool OTAManager::performUpdate() {
       
     case HTTP_UPDATE_NO_UPDATES:
       Serial.println("ℹ️ OTA: No update needed (server says current)");
+      clearOLED();
       if (postUpdateCallback) {
         Serial.println("🔄 Calling post-update callback (restore LEDs)");
         postUpdateCallback();
@@ -260,12 +310,14 @@ bool OTAManager::performUpdate() {
       return false;
       
     case HTTP_UPDATE_OK:
-      Serial.println("✅ OTA Update successful! Rebooting in 3 seconds...");
+      Serial.println("✅ OTA Update successful! Clearing OLED and rebooting in 3 seconds...");
+      clearOLED();
       delay(3000);
       ESP.restart();
       return true;
   }
   
   Serial.println("❓ Unknown OTA result");
+  clearOLED();
   return false;
 }
