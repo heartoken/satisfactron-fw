@@ -6,6 +6,7 @@
 #define NVS_KEY_DEVICE_ID "device_id"
 #define NVS_KEY_WIFI_SSID "wifi_ssid"
 #define NVS_KEY_WIFI_PASS "wifi_pass"
+
 #define DEFAULT_DEVICE_ID "d6e82982-697f-11f0-bb42-fbdbc29338ec"
 #define DEFAULT_WIFI_SSID "heartoken_default"
 #define DEFAULT_WIFI_PASS "satisfactron_42"
