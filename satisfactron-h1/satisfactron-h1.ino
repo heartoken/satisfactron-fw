@@ -9,7 +9,7 @@
 #define API_ENDPOINT "/api/votes"
 #define TEST_URL "https://satisfactron.vercel.app/"
 #define LED_ERR_PIN 1
-#define FIRMWARE_VERSION "25.07.27.2"
+#define FIRMWARE_VERSION "25.07.27.3"
 
 // —— HARDWARE —————————————————————————————————————
 #define PIN_RGBLED_3V3 9
@@ -22,7 +22,7 @@ Adafruit_NeoPixel strip(NUMPIXELS, PIN_RGBLED_3V3, NEO_RGB + NEO_KHZ800);
 // —— GLOBAL INSTANCES —————————————————————————————
 extern DeviceConfig deviceConfig;       // Use extern - defined in device_config.cpp
 OTAManager ota;                         // Add OTA instance
-volatile uint32_t lastAnyVoteTime = 0;  // Add missing variable
+volatile uint32_t lastAnyVoteTime = millis();
 volatile bool otaInProgress = false;    // ADD THIS - flag to disable voting during OTA
 
 // —— TIMINGS —————————————————————————————————————
