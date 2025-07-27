@@ -212,6 +212,12 @@ void setup() {
   Serial.println();
   Serial.printf("✅ WiFi connected: %s\n", WiFi.localIP().toString().c_str());
 
+  // Initialize OTA AFTER WiFi is connected
+  Serial.println("🔧 Initializing OTA Manager...");
+  ota.init(FIRMWARE_VERSION);
+  ota.setPreUpdateCallback(setAllLEDsPurple);
+  ota.setPostUpdateCallback(restoreNormalLEDs);
+
   short int retries = 0;
   while (!testServer("https://github.com") && retries < 20) {
     retries++;
@@ -222,24 +228,18 @@ void setup() {
     Serial.println("❌ BOOT: GitHub unreachable for OTA, skipping for now.");
   } else {
     Serial.println("✅ BOOT: GitHub reached at attempt #" + String(retries));
-  }
-  // Initialize OTA AFTER WiFi is connected
-  Serial.println("🔧 Initializing OTA Manager...");
-  ota.init(FIRMWARE_VERSION);
-  ota.setPreUpdateCallback(setAllLEDsPurple);
-  ota.setPostUpdateCallback(restoreNormalLEDs);
-
-  // Force boot-time update check (bypass shouldCheckForUpdate)
-  Serial.println("🔍 BOOT: Forcing OTA update check...");
-  bool updateAvailable = ota.forceCheckForUpdate();
-  if (updateAvailable) {
-    Serial.println("📦 BOOT: Update available, starting OTA...");
-    bool updateSuccess = ota.performUpdate();
-    if (!updateSuccess) {
-      Serial.println("❌ BOOT: Update failed, continuing with current version...");
+    // Force boot-time update check (bypass shouldCheckForUpdate)
+    Serial.println("🔍 BOOT: Forcing OTA update check...");
+    bool updateAvailable = ota.forceCheckForUpdate();
+    if (updateAvailable) {
+      Serial.println("📦 BOOT: Update available, starting OTA...");
+      bool updateSuccess = ota.performUpdate();
+      if (!updateSuccess) {
+        Serial.println("❌ BOOT: Update failed, continuing with current version...");
+      }
+    } else {
+      Serial.println("✅ BOOT: No update needed, continuing...");
     }
-  } else {
-    Serial.println("✅ BOOT: No update needed, continuing...");
   }
 
   // Create HTTP task on Core 0

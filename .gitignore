@@ -1,7 +1,7 @@
 venv/
 
-!poc_v1/build/esp32.esp32.esp32s3/
-poc_v1/build/esp32.esp32.esp32s3/*
-!poc_v1/build/esp32.esp32.esp32s3/satisfactron*.bin
+!satisfactron-h1/build/esp32.esp32.esp32s3/
+satisfactron-h1/build/esp32.esp32.esp32s3/*
+!satisfactron-h1/build/esp32.esp32.esp32s3/satisfactron-h1-fw_*.bin
 
 
